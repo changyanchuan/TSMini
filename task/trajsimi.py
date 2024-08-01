@@ -57,7 +57,6 @@ class TrajSimi:
 
     def train(self):
         training_starttime = time.time()
-        training_gpu_usage = training_ram_usage = 0.0
         logging.info("train_trajsimi start.@={:.3f}".format(training_starttime))
 
         self.criterion = nn.MSELoss().to(Config.device)
@@ -66,7 +65,7 @@ class TrajSimi:
                             'lr': Config.trajsimi_learning_rate,
                             'weight_decay': Config.trajsimi_learning_weight_decay}]
             
-        optimizer = torch.optim.Adam( learnable_params )
+        optimizer = torch.optim.Adam(learnable_params)
 
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 
                                                     step_size = Config.trajsimi_training_lr_degrade_step, 
@@ -89,6 +88,8 @@ class TrajSimi:
                 optimizer.zero_grad()
 
                 trajs, trajs_len, sampled_idxs = batch
+                trajs = trajs.to(Config.device)
+                trajs_len = trajs_len.to(Config.device)
                 sub_simi = self.dataset_simi_trains[sampled_idxs][:,sampled_idxs]
                 
                 embs = self.encoder(trajs, trajs_len)
@@ -138,8 +139,6 @@ class TrajSimi:
                         i_ep, *eval_metrics, time.time()-_time_eval))
             
             hr_eval_ep = eval_metrics[4]
-            training_gpu_usage = tool_funcs.mean(train_gpus)
-            training_ram_usage = tool_funcs.mean(train_rams)
 
             # early stopping
             if  hr_eval_ep > best_hr_eval:
@@ -164,15 +163,11 @@ class TrajSimi:
         test_starttime = time.time()
         test_metrics = self.test(dataset_type = 'test')
         test_endtime = time.time()
-        logging.info("test. @={:.3f}, mseloss={:.4f}, hr={:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}, gpu={}, ram={}".format( \
-                    test_endtime - test_starttime, *test_metrics))
+        logging.info("test. @={:.3f}, mseloss={:.4f}, hr={:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}, gpu={}, ram={}, @={:.3f}".format( \
+                    test_endtime - test_starttime, *test_metrics, test_endtime-test_starttime))
 
         return {'task_train_time': training_endtime - training_starttime, \
-                'task_train_gpu': training_gpu_usage, \
-                'task_train_ram': training_ram_usage, \
                 'task_test_time': test_endtime - test_starttime, \
-                'task_test_gpu': test_metrics[7], \
-                'task_test_ram': test_metrics[8], \
                 'hr10':test_metrics[1], 'hr50':test_metrics[2], 'hr50in10':test_metrics[3], \
                 'hr5':test_metrics[4], 'hr20':test_metrics[5], 'hr20in5':test_metrics[6]}
 
@@ -195,14 +190,18 @@ class TrajSimi:
         duplicate_short_tolerance = Config.traj_duplicate_short_tolerance if Config.dataset == 'xian' else 0
         dataloader = DataLoader(datasets,
                                 batch_size = Config.trajsimi_batch_size, 
-                                shuffle = False, 
-                                num_workers = 4, 
+                                shuffle = False,
+                                num_workers = 0,
+                                pin_memory = True,
                                 collate_fn = partial(collate_eval_test, 
                                                      space = copy.deepcopy(self.space), 
                                                      duplicate_short_tolerance = duplicate_short_tolerance) )
         traj_outs = []
         for _, batch in enumerate(dataloader):
             trajs, trajs_len = batch
+            trajs = trajs.to(Config.device)
+            trajs_len = trajs_len.to(Config.device)
+
             embs = self.encoder(trajs, trajs_len)
             traj_outs.append(embs)
         
@@ -274,21 +273,18 @@ def collate_training(batch, space, duplicate_short_tolerance):
     trajs = [preprocess_traj(t, space, duplicate_short_tolerance) for t in trajs]
     trajs, trajs_len = padding_traj(trajs)
     
-    trajs = torch.tensor(trajs, dtype = torch.float).to(Config.device)
-    trajs_len = torch.tensor(trajs_len, dtype = torch.long, device = Config.device)
+    trajs = torch.tensor(trajs, dtype = torch.float) # cpu
+    trajs_len = torch.tensor(trajs_len, dtype = torch.long)
     
     return trajs, trajs_len, sampled_idxs
 
 
 def collate_eval_test(trajs_src, space, duplicate_short_tolerance):
-    traj_tensor_type = None
-    trajs = [preprocess_traj(t, space, duplicate_short_tolerance) for t in trajs_src]
-    traj_tensor_type = torch.float
-    
+    trajs = [preprocess_traj(t, space, duplicate_short_tolerance) for t in trajs_src]    
     trajs, trajs_len = padding_traj(trajs)
     
-    trajs = torch.tensor(trajs, dtype = traj_tensor_type).to(Config.device)
-    trajs_len = torch.tensor(trajs_len, dtype = torch.long, device = Config.device)
+    trajs = torch.tensor(trajs, dtype = torch.float) # cpu
+    trajs_len = torch.tensor(trajs_len, dtype = torch.long)
 
     return  trajs, trajs_len
 
