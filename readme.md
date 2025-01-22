@@ -1,6 +1,6 @@
 # TSMini
 
-This is a pytorch implementation for the manuscript #870 submitted to KDD25.
+The offcial pytorch implementation of TSMini.
 
 ## Requirements
 - A linux server with Python 3.11.0
