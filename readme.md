@@ -1,6 +1,14 @@
-# TSMini
+# TSMini - K Nearest Neighbor-Guided Trajectory Similarity Learning
 
 The offcial pytorch implementation of TSMini.
+```
+@article{chang2025k,
+  title={K Nearest Neighbor-Guided Trajectory Similarity Learning},
+  author={Chang, Yanchuan and Cai, Xu and Jensen, Christian S and Qi, Jianzhong},
+  journal={arXiv preprint arXiv:2502.00285},
+  year={2025}
+}
+```
 
 ## Requirements
 - A linux server with Python 3.11.0
